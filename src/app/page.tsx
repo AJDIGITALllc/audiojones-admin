@@ -1,4 +1,10 @@
 import { cn } from "@/lib/cn";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Dashboard | Audio Jones Admin Portal",
+  description: "Audio Jones Administration Dashboard",
+};
 
 const navigationItems = [
   { name: "Dashboard", href: "#", active: true },

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { signOut } from "@/lib/auth";
 import { getAdminDashboardStats, listTenants, listTenantBookings } from "@/lib/api/admin";
 import type { AdminDashboardStats, Tenant, AdminBookingSummary } from "@/lib/types";
+import { TenantSelector } from "@/components/TenantSelector";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -85,12 +86,15 @@ export default function DashboardPage() {
               Multi-tenant management and oversight
             </p>
           </div>
-          <button
-            onClick={handleSignOut}
-            className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-gray-400 hover:text-white rounded-lg transition-colors border border-zinc-800"
-          >
-            Sign Out
-          </button>
+          <div className="flex items-center gap-4">
+            <TenantSelector />
+            <button
+              onClick={handleSignOut}
+              className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-gray-400 hover:text-white rounded-lg transition-colors border border-zinc-800"
+            >
+              Sign Out
+            </button>
+          </div>
         </div>
 
         {/* Stats Cards */}

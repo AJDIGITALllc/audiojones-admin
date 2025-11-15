@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Firestore Seed Script</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    button {
+      background: #FF4500;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 6px;
+      font-size: 16px;
+      cursor: pointer;
+      margin-top: 20px;
+    }
+    button:hover {
+      background: #FF5722;
+    }
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    #output {
+      margin-top: 20px;
+      padding: 15px;
+      background: #f8f8f8;
+      border-radius: 4px;
+      font-family: monospace;
+      white-space: pre-wrap;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    .success { color: #00AA00; }
+    .error { color: #CC0000; }
+    .warning { color: #FF9800; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🌱 Firestore Seed Script</h1>
+    <p>This will create test data in your Firebase project:</p>
+    <ul>
+      <li>2 tenants (Audio Jones, Artist Hub)</li>
+      <li>3 users (1 admin + 2 clients) - <strong>Firebase Auth + Firestore</strong></li>
+      <li>4 services (mixing, mastering, consultation, production)</li>
+      <li>3 bookings (various statuses)</li>
+    </ul>
+    
+    <p class="warning"><strong>Note:</strong> User creation will show test passwords in the output. Save them!</p>
+    
+    <button id="seedBtn" onclick="runSeed()">Run Seed Script</button>
+    <div id="output"></div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js';
+    import { getAuth, createUserWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js';
+    import { getFirestore, doc, setDoc, collection, addDoc, Timestamp } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js';
+
+    // Firebase config - UPDATE THESE VALUES
+    const firebaseConfig = {
+      apiKey: "AIzaSyCDqYyb2-fkEXYBm_JW3L1V-s3YtFaAvUk",
+      authDomain: "audiojoneswebsite.firebaseapp.com",
+      projectId: "audiojoneswebsite",
+      storageBucket: "audiojoneswebsite.firebasestorage.app",
+      messagingSenderId: "758877738746",
+      appId: "1:758877738746:web:92c0adf21fb97e7cea63c8",
+      measurementId: "G-GNGFQZR6ZP"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    let output = document.getElementById('output');
+    let seedBtn = document.getElementById('seedBtn');
+
+    function log(message, type = 'info') {
+      const span = document.createElement('span');
+      span.className = type;
+      span.textContent = message + '\n';
+      output.appendChild(span);
+      output.scrollTop = output.scrollHeight;
+    }
+
+    window.runSeed = async function() {
+      seedBtn.disabled = true;
+      output.innerHTML = '';
+      log('🌱 Starting Firestore seed...\n');
+
+      try {
+        // 1. Create Tenants
+        log('Creating tenants...');
+        await setDoc(doc(db, 'tenants', 'tenant-audiojones'), {
+          name: 'Audio Jones',
+          slug: 'audiojones',
+          status: 'active',
+          plan: 'pro',
+          ownerUserId: '', // Will update after admin is created
+          primaryColor: '#FF4500',
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+
+        await setDoc(doc(db, 'tenants', 'tenant-artisthub'), {
+          name: 'Artist Hub',
+          slug: 'artist-hub',
+          status: 'active',
+          plan: 'standard',
+          ownerUserId: '', // Will update after admin is created
+          primaryColor: '#FFD700',
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+        log('✅ Tenants created\n', 'success');
+
+        // 2. Create Users (Firebase Auth + Firestore)
+        log('Creating users with Firebase Auth...');
+        
+        // Admin user
+        const adminPassword = 'AdminTest123!';
+        let adminUid;
+        try {
+          const adminCred = await createUserWithEmailAndPassword(auth, 'admin@audiojones.com', adminPassword);
+          adminUid = adminCred.user.uid;
+          log(`  ✅ Created: admin@audiojones.com (${adminUid})`, 'success');
+        } catch (error) {
+          if (error.code === 'auth/email-already-exists' || error.code === 'auth/email-already-in-use') {
+            log(`  ⚠️ Auth user already exists: admin@audiojones.com`, 'warning');
+            adminUid = 'existing-admin'; // Placeholder - you'd need to get actual UID
+          } else {
+            throw error;
+          }
+        }
+
+        await setDoc(doc(db, 'users', adminUid), {
+          uid: adminUid,
+          email: 'admin@audiojones.com',
+          role: 'admin',
+          tenantId: 'tenant-audiojones',
+          displayName: 'Admin User',
+          emailVerified: true,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+
+        // Update tenant with admin UID
+        await setDoc(doc(db, 'tenants', 'tenant-audiojones'), {
+          ownerUserId: adminUid,
+        }, { merge: true });
+        await setDoc(doc(db, 'tenants', 'tenant-artisthub'), {
+          ownerUserId: adminUid,
+        }, { merge: true });
+
+        // Client 1
+        const client1Password = 'ClientTest123!';
+        let client1Uid;
+        try {
+          const client1Cred = await createUserWithEmailAndPassword(auth, 'marcus@example.com', client1Password);
+          client1Uid = client1Cred.user.uid;
+          log(`  ✅ Created: marcus@example.com (${client1Uid})`, 'success');
+        } catch (error) {
+          if (error.code === 'auth/email-already-exists' || error.code === 'auth/email-already-in-use') {
+            log(`  ⚠️ Auth user already exists: marcus@example.com`, 'warning');
+            client1Uid = 'existing-client1';
+          } else {
+            throw error;
+          }
+        }
+
+        await setDoc(doc(db, 'users', client1Uid), {
+          uid: client1Uid,
+          email: 'marcus@example.com',
+          role: 'client',
+          tenantId: 'tenant-audiojones',
+          displayName: 'Marcus Williams',
+          emailVerified: true,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+
+        // Client 2
+        const client2Password = 'ClientTest123!';
+        let client2Uid;
+        try {
+          const client2Cred = await createUserWithEmailAndPassword(auth, 'sarah@example.com', client2Password);
+          client2Uid = client2Cred.user.uid;
+          log(`  ✅ Created: sarah@example.com (${client2Uid})`, 'success');
+        } catch (error) {
+          if (error.code === 'auth/email-already-exists' || error.code === 'auth/email-already-in-use') {
+            log(`  ⚠️ Auth user already exists: sarah@example.com`, 'warning');
+            client2Uid = 'existing-client2';
+          } else {
+            throw error;
+          }
+        }
+
+        await setDoc(doc(db, 'users', client2Uid), {
+          uid: client2Uid,
+          email: 'sarah@example.com',
+          role: 'client',
+          tenantId: 'tenant-audiojones',
+          displayName: 'Sarah Chen',
+          emailVerified: true,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+
+        log('\n🔐 Test Credentials:', 'warning');
+        log(`  Admin: admin@audiojones.com / ${adminPassword}`, 'warning');
+        log(`  Client 1: marcus@example.com / ${client1Password}`, 'warning');
+        log(`  Client 2: sarah@example.com / ${client2Password}\n`, 'warning');
+
+        // 3. Create Services
+        log('Creating services...');
+        await setDoc(doc(db, 'services', 'svc-mixing'), {
+          tenantId: 'tenant-audiojones',
+          name: 'Professional Mixing',
+          category: 'artist',
+          description: 'Get your tracks mixed by industry professionals. Includes unlimited revisions and stems delivery.',
+          basePrice: 50000,
+          active: true,
+          duration: 120,
+          requiresApproval: true,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+
+        await setDoc(doc(db, 'services', 'svc-mastering'), {
+          tenantId: 'tenant-audiojones',
+          name: 'Mastering Session',
+          category: 'artist',
+          description: 'Professional mastering to make your tracks radio-ready. Includes streaming optimization.',
+          basePrice: 30000,
+          active: true,
+          duration: 60,
+          requiresApproval: true,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+
+        await setDoc(doc(db, 'services', 'svc-consultation'), {
+          tenantId: 'tenant-audiojones',
+          name: 'Strategy Consultation',
+          category: 'consulting',
+          description: '1-on-1 strategy session for artists looking to level up their career and brand.',
+          basePrice: 20000,
+          active: true,
+          duration: 60,
+          requiresApproval: false,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+
+        await setDoc(doc(db, 'services', 'svc-production'), {
+          tenantId: 'tenant-audiojones',
+          name: 'Beat Production',
+          category: 'artist',
+          description: 'Custom beat production tailored to your sound. Includes trackouts and unlimited revisions.',
+          basePrice: 80000,
+          active: true,
+          duration: 180,
+          requiresApproval: true,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+        log('✅ Services created\n', 'success');
+
+        // 4. Create Bookings
+        log('Creating bookings...');
+        const now = new Date();
+        const twoDaysFromNow = new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000);
+        const fiveDaysFromNow = new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000);
+
+        await addDoc(collection(db, 'bookings'), {
+          tenantId: 'tenant-audiojones',
+          userId: client1Uid,
+          serviceId: 'svc-mixing',
+          status: 'pending',
+          scheduledAt: Timestamp.fromDate(twoDaysFromNow),
+          notes: 'Looking for a professional mix on my latest single. I have stems ready.',
+          priceCents: 50000,
+          startTime: Timestamp.fromDate(twoDaysFromNow),
+          endTime: Timestamp.fromDate(new Date(twoDaysFromNow.getTime() + 2 * 60 * 60 * 1000)),
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+
+        await addDoc(collection(db, 'bookings'), {
+          tenantId: 'tenant-audiojones',
+          userId: client2Uid,
+          serviceId: 'svc-mastering',
+          status: 'approved',
+          scheduledAt: Timestamp.fromDate(fiveDaysFromNow),
+          notes: 'Final mastering for my EP. Need it to sound competitive on streaming.',
+          priceCents: 30000,
+          startTime: Timestamp.fromDate(fiveDaysFromNow),
+          endTime: Timestamp.fromDate(new Date(fiveDaysFromNow.getTime() + 60 * 60 * 1000)),
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+
+        await addDoc(collection(db, 'bookings'), {
+          tenantId: 'tenant-audiojones',
+          userId: client1Uid,
+          serviceId: 'svc-consultation',
+          status: 'approved',
+          scheduledAt: Timestamp.fromDate(new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)),
+          notes: 'Want to discuss my artist brand strategy and next release plan.',
+          priceCents: 20000,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+        log('✅ Bookings created\n', 'success');
+
+        log('✅✅✅ FIRESTORE SEEDING COMPLETE! ✅✅✅\n', 'success');
+        log('Created:');
+        log('  - 2 tenants (audiojones, artist-hub)');
+        log('  - 3 users (1 admin, 2 clients) - Auth + Firestore');
+        log('  - 4 services (mixing, mastering, consultation, production)');
+        log('  - 3 bookings (1 pending, 2 approved)\n');
+        log('🎉 You can now test both portals with real data!', 'success');
+
+      } catch (error) {
+        log(`\n❌ Error: ${error.message}`, 'error');
+        console.error('Full error:', error);
+      } finally {
+        seedBtn.disabled = false;
+      }
+    };
+  </script>
+</body>
+</html>

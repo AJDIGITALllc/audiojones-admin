@@ -1,99 +1,83 @@
 // src/app/api/admin/bookings/route.ts
 import { NextRequest, NextResponse } from 'next/server';
+import { db } from '@/lib/firebase';
+import { collection, getDocs, query, where, orderBy, limit, doc, getDoc } from 'firebase/firestore';
+import { requireAdmin, errorResponse } from '@/lib/api/middleware';
+import type { Booking, User, Service } from '@/lib/types/firestore';
 import type { AdminBookingSummary } from '@/lib/types';
 
-const mockBookings: AdminBookingSummary[] = [
-  {
-    id: 'booking-1',
-    tenantId: 'tenant-audiojones',
-    clientId: 'client-1',
-    clientName: 'Marcus Williams',
-    clientAvatarUrl: undefined,
-    serviceId: 'svc-mixing',
-    serviceName: 'Professional Mixing',
-    startTime: new Date(Date.now() + 86400000 * 2).toISOString(),
-    endTime: new Date(Date.now() + 86400000 * 2 + 7200000).toISOString(),
-    status: 'PENDING_ADMIN',
-    source: 'CLIENT_PORTAL',
-    approvalRequired: true,
-    createdAt: new Date(Date.now() - 3600000).toISOString(),
-  },
-  {
-    id: 'booking-2',
-    tenantId: 'tenant-audiojones',
-    clientId: 'client-2',
-    clientName: 'Sarah Chen',
-    clientAvatarUrl: undefined,
-    serviceId: 'svc-consultation',
-    serviceName: 'Strategy Consultation',
-    startTime: new Date(Date.now() + 86400000 * 5).toISOString(),
-    endTime: new Date(Date.now() + 86400000 * 5 + 3600000).toISOString(),
-    status: 'APPROVED',
-    source: 'CLIENT_PORTAL',
-    approvalRequired: true,
-    createdAt: new Date(Date.now() - 86400000).toISOString(),
-  },
-  {
-    id: 'booking-3',
-    tenantId: 'tenant-artisthub',
-    clientId: 'client-3',
-    clientName: 'David Rodriguez',
-    clientAvatarUrl: undefined,
-    serviceId: 'svc-production',
-    serviceName: 'Beat Production',
-    startTime: new Date(Date.now() + 86400000).toISOString(),
-    endTime: new Date(Date.now() + 86400000 + 10800000).toISOString(),
-    status: 'IN_PROGRESS',
-    source: 'MANUAL_ENTRY',
-    approvalRequired: false,
-    createdAt: new Date(Date.now() - 86400000 * 5).toISOString(),
-  },
-  {
-    id: 'booking-4',
-    tenantId: 'tenant-audiojones',
-    clientId: 'client-4',
-    clientName: 'Lisa Thompson',
-    clientAvatarUrl: undefined,
-    serviceId: 'svc-mastering',
-    serviceName: 'Mastering Session',
-    startTime: new Date(Date.now() + 86400000 * 7).toISOString(),
-    endTime: new Date(Date.now() + 86400000 * 7 + 3600000).toISOString(),
-    status: 'PENDING_ADMIN',
-    source: 'CLIENT_PORTAL',
-    approvalRequired: true,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'booking-5',
-    tenantId: 'tenant-smb-demo',
-    clientId: 'client-5',
-    clientName: 'Tech Startup Inc',
-    clientAvatarUrl: undefined,
-    serviceId: 'svc-podcast',
-    serviceName: 'Podcast Production',
-    startTime: new Date(Date.now() + 86400000 * 3).toISOString(),
-    endTime: new Date(Date.now() + 86400000 * 3 + 7200000).toISOString(),
-    status: 'APPROVED',
-    source: 'WHOP',
-    approvalRequired: true,
-    createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
-  },
-];
-
 export async function GET(request: NextRequest) {
-  const { searchParams } = request.nextUrl;
-  const status = searchParams.get('status');
-  const limit = searchParams.get('limit');
+  try {
+    const authResult = await requireAdmin(request);
+    if (authResult instanceof Response) return authResult;
 
-  let filtered = mockBookings;
+    const { searchParams } = request.nextUrl;
+    const status = searchParams.get('status');
+    const limitParam = searchParams.get('limit');
 
-  if (status) {
-    filtered = filtered.filter((b) => b.status === status);
+    let q = query(collection(db, 'bookings'), orderBy('createdAt', 'desc'));
+
+    if (status) {
+      q = query(
+        collection(db, 'bookings'),
+        where('status', '==', status.toLowerCase()),
+        orderBy('createdAt', 'desc')
+      );
+    }
+
+    if (limitParam) {
+      q = query(q, limit(parseInt(limitParam, 10)));
+    }
+
+    const snap = await getDocs(q);
+
+    const bookings: AdminBookingSummary[] = await Promise.all(
+      snap.docs.map(async (bookingDoc) => {
+        const data = bookingDoc.data() as Booking;
+
+        let clientName = 'Unknown';
+        let clientAvatarUrl: string | undefined = undefined;
+        try {
+          const userDoc = await getDoc(doc(db, 'users', data.userId));
+          if (userDoc.exists()) {
+            const userData = userDoc.data() as User;
+            clientName = userData.displayName;
+          }
+        } catch (err) {
+          console.error('Failed to fetch user:', err);
+        }
+
+        let serviceName = 'Unknown Service';
+        try {
+          const serviceDoc = await getDoc(doc(db, 'services', data.serviceId));
+          if (serviceDoc.exists()) {
+            serviceName = (serviceDoc.data() as Service).name;
+          }
+        } catch (err) {
+          console.error('Failed to fetch service:', err);
+        }
+
+        return {
+          id: bookingDoc.id,
+          tenantId: data.tenantId,
+          clientId: data.userId,
+          clientName,
+          clientAvatarUrl,
+          serviceId: data.serviceId,
+          serviceName,
+          startTime: data.startTime?.toDate().toISOString() || data.scheduledAt?.toDate().toISOString() || '',
+          endTime: data.endTime?.toDate().toISOString() || data.scheduledAt?.toDate().toISOString() || '',
+          status: data.status.toUpperCase().replace('_', '-') as any,
+          source: 'CLIENT_PORTAL' as any,
+          approvalRequired: true,
+          createdAt: data.createdAt.toDate().toISOString(),
+        };
+      })
+    );
+
+    return NextResponse.json(bookings);
+  } catch (error) {
+    console.error('Failed to fetch bookings:', error);
+    return errorResponse('Failed to fetch bookings');
   }
-
-  if (limit) {
-    filtered = filtered.slice(0, parseInt(limit));
-  }
-
-  return NextResponse.json(filtered);
 }

@@ -1,8 +1,11 @@
 // src/app/api/admin/tenants/[tenantId]/bookings/[bookingId]/route.ts
 import { NextRequest, NextResponse } from 'next/server';
+import { db } from '@/lib/firebase';
+import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import type { AdminBookingDetail } from '@/lib/types';
 
-const mockBookingDetails: AdminBookingDetail[] = [
+// Removed mock data - using Firestore
+const _mockBookingDetails_removed: AdminBookingDetail[] = [
   {
     id: 'booking-admin-1',
     tenantId: 'tenant-audiojones',
@@ -80,14 +83,67 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ tenantId: string; bookingId: string }> }
 ) {
-  const { tenantId, bookingId } = await params;
-  const booking = mockBookingDetails.find(
-    (b) => b.id === bookingId && b.tenantId === tenantId
-  );
+  try {
+    const { tenantId, bookingId } = await params;
+    
+    // Fetch booking document
+    const bookingDoc = await getDoc(doc(db, 'bookings', bookingId));
+    
+    if (!bookingDoc.exists()) {
+      return NextResponse.json({ error: 'Booking not found' }, { status: 404 });
+    }
 
-  if (!booking) {
-    return NextResponse.json({ error: 'Booking not found' }, { status: 404 });
+    const data = bookingDoc.data();
+    
+    // Verify tenant ownership
+    if (data.tenantId !== tenantId) {
+      return NextResponse.json({ error: 'Booking not found' }, { status: 404 });
+    }
+
+    // Fetch user name
+    const userQuery = query(collection(db, 'users'), where('uid', '==', data.userId));
+    const userSnapshot = await getDocs(userQuery);
+    const userName = userSnapshot.docs[0]?.data()?.displayName || 'Unknown User';
+
+    // Fetch service details
+    const serviceDoc = await getDoc(doc(db, 'services', data.serviceId));
+    const serviceName = serviceDoc.data()?.name || 'Unknown Service';
+    const servicePrice = serviceDoc.data()?.basePrice || 0;
+
+    // Build detailed booking response
+    const booking: AdminBookingDetail = {
+      id: bookingDoc.id,
+      tenantId: data.tenantId,
+      clientId: data.userId,
+      clientName: userName,
+      serviceId: data.serviceId,
+      serviceName: serviceName,
+      startTime: data.startTime?.toDate?.()?.toISOString() || data.scheduledAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+      endTime: data.endTime?.toDate?.()?.toISOString() || new Date().toISOString(),
+      status: data.status?.toUpperCase() || 'PENDING',
+      source: 'CLIENT_PORTAL',
+      approvalRequired: true,
+      createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+      updatedAt: data.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+      priceCents: data.priceCents || servicePrice || 0,
+      notesFromClient: data.notes || '',
+      internalNotes: data.internalNotes || '',
+      intakeAnswers: data.intakeAnswers || {},
+      assets: [],
+      timeline: [
+        {
+          id: 'timeline-1',
+          label: 'Booking Created',
+          createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+          actorLabel: userName,
+          type: 'BOOKING_CREATED',
+        },
+      ],
+    };
+
+    return NextResponse.json(booking);
+  } catch (error) {
+    console.error('Error fetching booking detail:', error);
+    return NextResponse.json({ error: 'Failed to fetch booking' }, { status: 500 });
   }
-
-  return NextResponse.json(booking);
 }

@@ -1,8 +1,11 @@
 // src/app/api/admin/tenants/[tenantId]/bookings/route.ts
 import { NextRequest, NextResponse } from 'next/server';
+import { db } from '@/lib/firebase';
+import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
 import type { AdminBookingSummary } from '@/lib/types';
 
-const mockBookings: AdminBookingSummary[] = [
+// Removed mock data - using Firestore
+const _mockBookings_removed: AdminBookingSummary[] = [
   {
     id: 'booking-admin-1',
     tenantId: 'tenant-audiojones',
@@ -84,15 +87,60 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ tenantId: string }> }
 ) {
-  const { tenantId } = await params;
-  const { searchParams } = request.nextUrl;
-  const status = searchParams.get('status');
+  try {
+    const { tenantId } = await params;
+    const { searchParams } = request.nextUrl;
+    const statusFilter = searchParams.get('status');
 
-  let filtered = mockBookings.filter((b) => b.tenantId === tenantId);
+    // Build Firestore query
+    let q = query(
+      collection(db, 'bookings'),
+      where('tenantId', '==', tenantId),
+      orderBy('createdAt', 'desc')
+    );
 
-  if (status) {
-    filtered = filtered.filter((b) => b.status === status);
+    const snapshot = await getDocs(q);
+    let bookings: AdminBookingSummary[] = [];
+
+    // Get user and service names for each booking
+    for (const doc of snapshot.docs) {
+      const data = doc.data();
+      
+      // Fetch user name
+      const userDoc = await getDocs(query(collection(db, 'users'), where('uid', '==', data.userId)));
+      const userName = userDoc.docs[0]?.data()?.displayName || 'Unknown User';
+      
+      // Fetch service name
+      const serviceDoc = await getDocs(query(collection(db, 'services'), where('__name__', '==', data.serviceId)));
+      const serviceName = serviceDoc.docs[0]?.data()?.name || 'Unknown Service';
+
+      const booking: AdminBookingSummary = {
+        id: doc.id,
+        tenantId: data.tenantId,
+        clientId: data.userId,
+        clientName: userName,
+        clientAvatarUrl: undefined,
+        serviceId: data.serviceId,
+        serviceName: serviceName,
+        startTime: data.startTime?.toDate?.()?.toISOString() || data.scheduledAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+        endTime: data.endTime?.toDate?.()?.toISOString() || new Date().toISOString(),
+        status: data.status?.toUpperCase() || 'PENDING',
+        source: 'CLIENT_PORTAL',
+        approvalRequired: true,
+        createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+      };
+
+      bookings.push(booking);
+    }
+
+    // Filter by status if provided
+    if (statusFilter) {
+      bookings = bookings.filter((b) => b.status === statusFilter.toUpperCase());
+    }
+
+    return NextResponse.json(bookings);
+  } catch (error) {
+    console.error('Error fetching tenant bookings:', error);
+    return NextResponse.json({ error: 'Failed to fetch bookings' }, { status: 500 });
   }
-
-  return NextResponse.json(filtered);
 }

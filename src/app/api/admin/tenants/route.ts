@@ -5,6 +5,7 @@ import { collection, getDocs, orderBy, query } from 'firebase/firestore';
 import { requireAdmin, errorResponse } from '@/lib/api/middleware';
 import type { Tenant as FirestoreTenant } from '@/lib/types/firestore';
 import type { Tenant } from '@/lib/types';
+import { logError } from '@/lib/log';
 
 export async function GET(request: NextRequest) {
   try {
@@ -29,7 +30,10 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(tenants);
   } catch (error) {
-    console.error('Failed to fetch tenants:', error);
-    return errorResponse('Failed to fetch tenants');
+    logError('api/admin/tenants GET', error, {
+      url: request.url,
+      method: 'GET',
+    });
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

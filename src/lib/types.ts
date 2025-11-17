@@ -49,6 +49,13 @@ export type BookingStatus =
   | 'CANCELED'
   | 'COMPLETED';
 
+export interface BookingStatusEvent {
+  status: BookingStatus;
+  changedAt: string; // ISO timestamp
+  changedByUserId?: string;
+  note?: string;
+}
+
 export interface AdminBookingSummary {
   id: string;
   tenantId: string;
@@ -74,6 +81,7 @@ export interface AdminBookingDetail extends AdminBookingSummary {
   assets: AssetFileSummary[];
   timeline: BookingTimelineEvent[];
   updatedAt?: string;
+  statusHistory?: BookingStatusEvent[];
 }
 
 export interface BookingTimelineEvent {

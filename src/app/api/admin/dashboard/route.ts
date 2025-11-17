@@ -5,6 +5,7 @@ import { collection, getDocs, query, where, Timestamp } from 'firebase/firestore
 import { requireAdmin, errorResponse } from '@/lib/api/middleware';
 import type { Tenant, Booking, User } from '@/lib/types/firestore';
 import type { AdminDashboardStats } from '@/lib/types';
+import { logError } from '@/lib/log';
 
 export async function GET(request: NextRequest) {
   try {
@@ -53,7 +54,10 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(stats);
   } catch (error) {
-    console.error('Failed to fetch admin dashboard stats:', error);
-    return errorResponse('Failed to fetch admin dashboard stats');
+    logError('api/admin/dashboard GET', error, {
+      url: request.url,
+      method: 'GET',
+    });
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

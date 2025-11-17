@@ -45,6 +45,14 @@ export interface Tenant {
 // ============================================================================
 
 export type ServiceCategory = "artist" | "consulting" | "podcast" | "other";
+export type SchedulingProvider = "calcom" | "calendly" | "other" | "none";
+export type BillingProvider = "whop" | "stripe" | "manual" | "none";
+
+export interface WhopConfig {
+  productId?: string;
+  url?: string; // public checkout URL if known
+  syncEnabled?: boolean; // whether this service should sync with Whop
+}
 
 export interface Service {
   id: string;
@@ -56,6 +64,14 @@ export interface Service {
   active: boolean;
   duration?: number; // minutes
   requiresApproval?: boolean;
+  schedulingProvider?: SchedulingProvider;
+  schedulingUrl?: string | null;
+  defaultDurationMinutes?: number | null;
+  billingProvider?: BillingProvider;
+  billingProductId?: string | null;
+  priceCents?: number | null;
+  currency?: string | null;
+  whop?: WhopConfig;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
@@ -73,6 +89,15 @@ export type BookingStatus =
   | "cancelled"
   | "declined";
 
+export interface BookingStatusEvent {
+  status: BookingStatus;
+  changedAt: string; // ISO timestamp
+  changedByUserId?: string;
+  note?: string;
+}
+
+export type PaymentStatus = "unpaid" | "pending" | "paid" | "refunded";
+
 export interface Booking {
   id: string;
   tenantId: string;
@@ -87,6 +112,11 @@ export interface Booking {
   endTime?: Timestamp;
   createdAt: Timestamp;
   updatedAt: Timestamp;
+  statusHistory?: BookingStatusEvent[];
+  paymentStatus?: PaymentStatus;
+  paymentProvider?: BillingProvider;
+  paymentExternalId?: string | null;
+  paymentUrl?: string | null;
 }
 
 // ============================================================================

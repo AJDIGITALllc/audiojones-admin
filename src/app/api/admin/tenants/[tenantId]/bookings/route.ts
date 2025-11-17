@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
 import type { AdminBookingSummary } from '@/lib/types';
+import { logError } from '@/lib/log';
 
 // Removed mock data - using Firestore
 const _mockBookings_removed: AdminBookingSummary[] = [
@@ -140,7 +141,10 @@ export async function GET(
 
     return NextResponse.json(bookings);
   } catch (error) {
-    console.error('Error fetching tenant bookings:', error);
-    return NextResponse.json({ error: 'Failed to fetch bookings' }, { status: 500 });
+    logError('api/admin/tenants/[tenantId]/bookings GET', error, {
+      url: request.url,
+      method: 'GET',
+    });
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

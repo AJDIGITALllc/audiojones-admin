@@ -5,6 +5,7 @@ import { collection, getDocs, query, where, orderBy, limit, doc, getDoc } from '
 import { requireAdmin, errorResponse } from '@/lib/api/middleware';
 import type { Booking, User, Service } from '@/lib/types/firestore';
 import type { AdminBookingSummary } from '@/lib/types';
+import { logError } from '@/lib/log';
 
 export async function GET(request: NextRequest) {
   try {
@@ -77,7 +78,10 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(bookings);
   } catch (error) {
-    console.error('Failed to fetch bookings:', error);
-    return errorResponse('Failed to fetch bookings');
+    logError('api/admin/bookings GET', error, {
+      url: request.url,
+      method: 'GET',
+    });
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

@@ -4,9 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "npm run validate:env && next build",
     "start": "next start",
     "lint": "eslint",
+    "validate:env": "tsx scripts/validate-env.ts",
+    "sync:whop": "tsx scripts/sync-whop-services.ts",
     "seed:firestore": "ts-node --project scripts/tsconfig.json ./scripts/seed-firestore.ts"
   },
   "dependencies": {
@@ -19,9 +21,10 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
+    "@types/node": "^20.19.25",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "ajv": "^8.17.1",
     "babel-plugin-react-compiler": "1.0.0",
     "dotenv": "^17.2.3",
     "eslint": "^9",
@@ -29,6 +32,7 @@
     "firebase-admin": "^13.6.0",
     "tailwindcss": "^4",
     "ts-node": "^10.9.2",
+    "tsx": "^4.20.6",
     "typescript": "^5"
   }
 }

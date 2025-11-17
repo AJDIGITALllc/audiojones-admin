@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { listTenantBookings, getBookingDetail, getTenant } from "@/lib/api/admin";
 import type { AdminBookingSummary, AdminBookingDetail, Tenant, BookingStatus } from "@/lib/types";
+import { getModulePlaybook, getBookingFunnelStage } from "@/lib/playbooks-local";
 
 const statusFilters = [
   { value: "ALL", label: "All" },
@@ -383,6 +384,62 @@ function BookingDetailDrawer({
                   </div>
                 </div>
               )}
+
+              {/* Module Ops Notes */}
+              {(() => {
+                const funnelStage = getBookingFunnelStage(booking.status as any);
+                const moduleId = booking.serviceName.toLowerCase().includes('ai') 
+                  ? 'ai-optimization'
+                  : booking.serviceName.toLowerCase().includes('data')
+                  ? 'data-intelligence'
+                  : booking.serviceName.toLowerCase().includes('market')
+                  ? 'marketing-automation'
+                  : 'client-delivery';
+                const playbook = getModulePlaybook(moduleId);
+                
+                if (!playbook) return null;
+
+                return (
+                  <div className="bg-blue-500/10 border border-blue-500/50 rounded-lg p-4">
+                    <h4 className="text-sm font-medium text-blue-400 mb-3">
+                      📋 Module Ops Notes: {playbook.name}
+                    </h4>
+                    <div className="space-y-3">
+                      <div>
+                        <p className="text-xs font-semibold text-blue-300 uppercase tracking-wide mb-2">
+                          Should Achieve (During Delivery)
+                        </p>
+                        <ul className="space-y-1">
+                          {playbook.opsChecks.shouldAchieve.map((check, idx) => (
+                            <li key={idx} className="text-sm text-white flex items-start gap-2">
+                              <span className="text-blue-400 mt-0.5">•</span>
+                              <span>{check}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-green-300 uppercase tracking-wide mb-2">
+                          Verify Post-Delivery
+                        </p>
+                        <ul className="space-y-1">
+                          {playbook.opsChecks.verifyPostDelivery.map((check, idx) => (
+                            <li key={idx} className="text-sm text-white flex items-start gap-2">
+                              <span className="text-green-400 mt-0.5">•</span>
+                              <span>{check}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div className="pt-2 border-t border-blue-500/30">
+                        <p className="text-xs text-gray-400">
+                          Funnel Stage: <span className="text-blue-300">{funnelStage || 'Unknown'}</span>
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Actions */}

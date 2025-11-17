@@ -110,3 +110,21 @@ export async function requireAdmin(request: Request): Promise<RequestContext | R
   
   return authResult;
 }
+
+/**
+ * Require tenant assignment
+ * Returns user context if tenant is assigned, or sends 400 response
+ */
+export async function requireTenantAssignment(request: Request): Promise<RequestContext | Response> {
+  const authResult = await requireAuth(request);
+  
+  if (authResult instanceof Response) {
+    return authResult;
+  }
+  
+  if (!authResult.tenantId) {
+    return errorResponse('Account configuration incomplete. Contact support.', 400);
+  }
+  
+  return authResult;
+}

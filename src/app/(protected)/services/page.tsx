@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { db } from "@/lib/firebase";
+import { db, auth } from "@/lib/firebase";
 import { collection, getDocs, query, where, doc, updateDoc } from "firebase/firestore";
 import type { Service, SchedulingProvider } from "@/lib/types/firestore";
 import EmptyState from "@/components/EmptyState";
+import { emitTenantConfigUpdated } from "@/lib/events";
 
 interface ServiceRow extends Service {
   id: string;
@@ -60,6 +61,8 @@ export default function ServicesPage() {
 
   async function saveEdit(serviceId: string) {
     try {
+      const oldService = services.find(s => s.id === serviceId);
+      
       await updateDoc(doc(db, "services", serviceId), {
         schedulingProvider: editForm.schedulingProvider,
         schedulingUrl: editForm.schedulingUrl || null,
@@ -70,6 +73,29 @@ export default function ServicesPage() {
           url: null, // Set by sync script
         },
       });
+
+      // Emit admin event for automation
+      try {
+        const changedFields: string[] = [];
+        if (oldService?.schedulingProvider !== editForm.schedulingProvider) changedFields.push('schedulingProvider');
+        if (oldService?.schedulingUrl !== editForm.schedulingUrl) changedFields.push('schedulingUrl');
+        if (oldService?.defaultDurationMinutes !== editForm.defaultDurationMinutes) changedFields.push('defaultDurationMinutes');
+        if (oldService?.whop?.syncEnabled !== editForm.whopSyncEnabled) changedFields.push('whopSyncEnabled');
+        if (oldService?.whop?.productId !== editForm.whopProductId) changedFields.push('whopProductId');
+
+        await emitTenantConfigUpdated({
+          tenantId: oldService?.tenantId || 'unknown',
+          adminId: auth.currentUser?.uid || 'system',
+          serviceId: serviceId,
+          changedFields,
+          whopLinked: editForm.whopSyncEnabled && !!editForm.whopProductId,
+          billingProvider: editForm.whopSyncEnabled ? 'whop' : undefined,
+          moduleIds: undefined, // TODO: Add module field to Service type when implementing module tagging
+        });
+      } catch (eventError) {
+        console.error('Failed to emit config update event:', eventError);
+      }
+
       await fetchServices();
       setEditingId(null);
     } catch (error) {

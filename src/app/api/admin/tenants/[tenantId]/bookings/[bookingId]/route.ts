@@ -9,6 +9,7 @@ import { requireAdmin } from '@/lib/api/middleware';
 import { logNotification } from '@/lib/notifications/store';
 import { sendEmail } from '@/lib/notifications/email';
 import type { BookingStatusChangedPayload } from '@/lib/notifications/types';
+import { emitBookingStatusUpdated } from '@/lib/events';
 
 // Removed mock data - using Firestore
 const _mockBookingDetails_removed: AdminBookingDetail[] = [
@@ -227,6 +228,26 @@ export async function PATCH(
       statusHistory: updatedHistory,
       updatedAt: Timestamp.now(),
     });
+
+    // Emit admin event for automation
+    try {
+      // Fetch service to get module info
+      const serviceDoc = await getDoc(doc(db, 'services', bookingData.serviceId));
+      const serviceData = serviceDoc.exists() ? serviceDoc.data() : null;
+      const moduleIds = serviceData?.module ? [serviceData.module] : undefined;
+
+      await emitBookingStatusUpdated({
+        tenantId,
+        adminId: authResult.user?.uid || 'system',
+        bookingId,
+        oldStatus: oldStatus,
+        newStatus: normalizedNewStatus,
+        moduleIds,
+      });
+    } catch (eventError) {
+      // Best-effort: don't fail request if event emission fails
+      logError('admin-event/booking_status_updated', eventError);
+    }
 
     // Log notification event
     const notificationPayload: BookingStatusChangedPayload = {

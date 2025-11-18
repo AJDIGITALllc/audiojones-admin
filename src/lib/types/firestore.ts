@@ -117,6 +117,9 @@ export interface Booking {
   paymentProvider?: BillingProvider;
   paymentExternalId?: string | null;
   paymentUrl?: string | null;
+  paymentReference?: string | null; // Whop transaction ID or other payment reference
+  paymentAmountCents?: number | null; // Actual amount charged
+  paymentCurrency?: string | null; // Currency code (e.g., USD)
 }
 
 // ============================================================================
